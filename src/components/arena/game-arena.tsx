@@ -16,6 +16,7 @@ import type {
 } from "@/lib/supabase/database.types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ArenaCanvas } from "@/components/arena/arena-canvas";
 
 type GameArenaProps = {
   roomId: string;
@@ -125,47 +126,53 @@ export function GameArena({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{phaseLabel(gameState.phase)}</Badge>
-        <span className="text-sm text-[var(--muted)]">
-          Seekers {gameState.seekers_score} — Guardians {gameState.guardians_score}
-        </span>
-        <span className="font-mono text-xs text-[var(--muted)]">
-          seq {gameState.action_seq} · hash {gameState.last_hash.slice(0, 12)}…
-        </span>
+      {/* Round Header & Cryptographic Status */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="px-2.5 py-1 text-xs">
+            {phaseLabel(gameState.phase)}
+          </Badge>
+          <span className="font-semibold text-sm text-[var(--fg)]">
+            Seekers <span className="text-emerald-400">{gameState.seekers_score}</span> — Guardians <span className="text-amber-400">{gameState.guardians_score}</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs text-[var(--muted)]">
+            seq {gameState.action_seq} · hash {gameState.last_hash.slice(0, 10)}…
+          </span>
+          {myTeam && (
+            <span
+              className="rounded px-2 py-0.5 text-xs font-medium border border-[var(--border)]"
+              style={{
+                color: myTeam === "seekers" ? "var(--seeker)" : "var(--guardian)",
+                borderColor: myTeam === "seekers" ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)",
+              }}
+            >
+              Your Team: {teamLabel(myTeam)}
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="arena-grid relative overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)]/60 p-6">
-        <div className="mx-auto flex max-w-lg flex-col items-center gap-8">
-          <TeamRow
-            label="Guardians"
-            color="var(--guardian)"
-            members={guardians}
-            profiles={profiles}
-            tagged={tagged}
-            selfId={userId}
-          />
+      {/* Interactive 2D Physics Arena Canvas */}
+      <ArenaCanvas
+        roomId={roomId}
+        userId={userId}
+        myTeam={myTeam || "seekers"}
+        gameState={gameState}
+        members={members}
+        profiles={profiles}
+        isHost={isHost}
+        onTriggerAction={(actionType, payload) => {
+          void submitAction(actionType, payload as Record<string, Json>);
+        }}
+      />
 
-          <div className="flex flex-col items-center">
-            <p className="mb-2 text-xs uppercase tracking-wider text-[var(--muted)]">
-              Stone stack ({gameState.stack_height}/{MAX_STACK})
-            </p>
-            <div className="stone-stack min-h-[140px] justify-end">
-              {Array.from({ length: gameState.stack_height }).map((_, i) => (
-                <div
-                  key={i}
-                  className="stone"
-                  style={{ width: `${48 + (i % 3) * 6}px` }}
-                />
-              ))}
-              {gameState.stack_height === 0 && (
-                <p className="text-sm text-[var(--accent)]">Stack broken!</p>
-              )}
-            </div>
-          </div>
-
+      {/* Teams & Manual Control Strip */}
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)]/60 p-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           <TeamRow
-            label="Seekers"
+            label="Seekers (Rebuilders)"
             color="var(--seeker)"
             members={seekers}
             profiles={profiles}
@@ -173,86 +180,72 @@ export function GameArena({
             selfId={userId}
             throwerId={gameState.thrower_id}
           />
+          <TeamRow
+            label="Guardians (Defenders)"
+            color="var(--guardian)"
+            members={guardians}
+            profiles={profiles}
+            tagged={tagged}
+            selfId={userId}
+          />
+        </div>
+
+        {/* Optional Manual Action Buttons for Quick Viva / Testing */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] pt-3 text-xs text-[var(--muted)]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Manual triggers:</span>
+            {isHost && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => submitAction("start_game", {})}
+              >
+                {gameState.phase === "waiting" ? "Start Round" : "Next Round"}
+              </Button>
+            )}
+
+            {canThrow && (
+              <Button size="sm" variant="outline" disabled={busy} onClick={throwStone}>
+                Throw Ball (70% Hit)
+              </Button>
+            )}
+
+            {canRebuild && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => submitAction("rebuild_stone", {})}
+              >
+                +1 Stone (Manual)
+              </Button>
+            )}
+
+            {canTag &&
+              seekers
+                .filter((s) => !tagged.has(s.user_id))
+                .slice(0, 2)
+                .map((s) => (
+                  <Button
+                    key={s.user_id}
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => submitAction("tag_player", { targetId: s.user_id })}
+                  >
+                    Tag {profiles[s.user_id] ?? "Seeker"}
+                  </Button>
+                ))}
+          </div>
+
+          <span className="font-mono text-[11px]">
+            {busy ? "Submitting hashed action..." : "Cryptographic chain verified"}
+          </span>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {isHost &&
-          (gameState.phase === "waiting" ||
-            gameState.phase === "seekers_win" ||
-            gameState.phase === "guardians_win") && (
-            <Button
-              disabled={busy || members.length < 2}
-              onClick={() => submitAction("start_game", {})}
-            >
-              {gameState.phase === "waiting" ? "Start game" : "Next round"}
-            </Button>
-          )}
-
-        {canThrow && (
-          <div className="flex w-full flex-wrap items-end gap-3 sm:w-auto">
-            <label className="flex flex-col gap-1 text-xs text-[var(--muted)]">
-              Aim
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={aim}
-                onChange={(e) => setAim(Number(e.target.value))}
-                className="w-40"
-              />
-            </label>
-            <Button disabled={busy} onClick={throwStone}>
-              Throw
-            </Button>
-          </div>
-        )}
-
-        {canRebuild && (
-          <Button
-            disabled={busy}
-            onClick={() => submitAction("rebuild_stone", {})}
-          >
-            Place a stone
-          </Button>
-        )}
-
-        {canTag &&
-          seekers
-            .filter((s) => !tagged.has(s.user_id))
-            .map((s) => (
-              <Button
-                key={s.user_id}
-                variant="secondary"
-                disabled={busy}
-                onClick={() =>
-                  submitAction("tag_player", { targetId: s.user_id })
-                }
-              >
-                Tag {profiles[s.user_id] ?? "seeker"}
-              </Button>
-            ))}
-      </div>
-
-      {myTeam && (
-        <p className="text-sm text-[var(--muted)]">
-          You are on{" "}
-          <span
-            style={{
-              color: myTeam === "seekers" ? "var(--seeker)" : "var(--guardian)",
-            }}
-          >
-            {teamLabel(myTeam)}
-          </span>
-          .
-        </p>
-      )}
-      {error && <p className="text-sm text-red-300">{error}</p>}
-      {members.length < 2 && gameState.phase === "waiting" && (
-        <p className="text-sm text-[var(--muted)]">
-          Need at least 2 players to start.
-        </p>
-      )}
+      {error && <p className="text-sm text-red-300 font-medium">⚠️ {error}</p>}
     </div>
   );
 }
