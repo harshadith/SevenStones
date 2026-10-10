@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+:root {
+  --bg-deep: #0c1a14;
+  --bg: #12261c;
+  --surface: #1a3326;
+  --surface-2: #214032;
+  --surface-3: #2a5240;
+  --border: #3d6b54;
+  --fg: #e8f2ec;
+  --muted: #9bb5a6;
+  --accent: #d4a017;
+  --accent-hover: #e6b422;
+  --accent-fg: #1a1400;
+  --seeker: #3d9bff;
+  --guardian: #e07a3d;
+  --stone: #c4b59a;
+  --background: var(--bg);
+  --foreground: var(--fg);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+body {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, #1e4d36 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, #1a3a2a 0%, transparent 50%),
+    var(--bg-deep);
+  color: var(--fg);
+  font-family: var(--font-display), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+.font-mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.stone-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 3px;
+}
+
+.stone {
+  width: 56px;
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ddd0b4 0%, #a89472 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.arena-grid {
+  background-image:
+    linear-gradient(rgba(61, 107, 84, 0.25) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 107, 84, 0.25) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
